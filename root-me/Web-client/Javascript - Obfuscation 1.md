@@ -15,8 +15,10 @@ if (prompt("Enter password:") == password) alert("Success!");
 else alert("Wrong password!");
 
 Tớ nhận ra:
-🔸 Biến password được gán bằng unescape(...) – đây là hàm dùng để giải mã chuỗi escape, thường dùng để làm rối mật khẩu. %63 (hex) chuyển sang chuỗi là "c" tượng tự như thế với các ký tự tiếp theo
-🔸 Nếu nhập đúng mật khẩu thì sẽ alert ra "Success!"
+
+   🔸 Biến password được gán bằng unescape(...) – đây là hàm dùng để giải mã chuỗi escape, thường dùng để làm rối mật khẩu. %63 (hex) chuyển sang chuỗi là "c" tượng tự như thế với các ký tự tiếp theo
+
+   🔸 Nếu nhập đúng mật khẩu thì sẽ alert ra "Success!"
 
 Tớ thử copy đoạn unescape('%63...') vào tab Console (F12) rồi Enter → và nó trả về chuỗi gốc là:
 ![console giải mã](https://github.com/monkey1112004/writeups-ctf/raw/main/root-me/Web-client/images/Javascript_Obfuscation_1.png)
