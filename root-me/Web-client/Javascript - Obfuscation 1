@@ -19,5 +19,6 @@ Tớ nhận ra:
 🔸 Nếu nhập đúng mật khẩu thì sẽ alert ra "Success!"
 
 Tớ thử copy đoạn unescape('%63...') vào tab Console (F12) rồi Enter → và nó trả về chuỗi gốc là:
-![console giải mã](https://github.com/monkey1112004/root-me/raw/main/Web-client/images/Javascript_Obfuscation_1.png)
+![console giải mã](https://github.com/monkey1112004/writeups-ctf/raw/main/root-me/Web-client/images/Javascript_Obfuscation_1.png)
+
 
