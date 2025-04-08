@@ -9,10 +9,10 @@ Tớ chọn "Cancel", sau đó nhớ lại mindset mình đã định sẵn:
 
 “Đừng tin vào những gì hiển thị, hãy xem kỹ mã nguồn!”
 
-Vậy là tớ bấm Ctrl + U để xem source HTML của trang. Và đúng như mong đợi, tớ phát hiện một đoạn JavaScript có dạng:
-var password = unescape('%63%70%61%73%62%69%65%6e%64%75%72%70%61%73%73%77%6f%72%64');
-if (prompt("Enter password:") == password) alert("Success!");
-else alert("Wrong password!");
+Vậy là tớ bấm Ctrl + U để xem source HTML của trang. Và đúng như mong đợi, tớ phát hiện một đoạn JavaScript có dạng:/n
+   var password = unescape('%63%70%61%73%62%69%65%6e%64%75%72%70%61%73%73%77%6f%72%64');
+      if (prompt("Enter password:") == password) alert("Success!");
+      else alert("Wrong password!");
 
 Tớ nhận ra:
 
