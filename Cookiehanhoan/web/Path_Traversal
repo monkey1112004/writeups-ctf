@@ -1,0 +1,58 @@
+1. Mô tả chall
+Thể loại: Web.
+
+Endpoint chính: /get_info.
+
+Gợi ý: “How to create request to endpoint /flag”.
+
+Nhiệm vụ: lấy flag từ server.
+
+Khi gửi request ban đầu:
+POST /get_info
+userid=0
+khi thử:
+userid=../../etc/passwd
+-> trả về 404
+thử:
+userid=../flag
+-> ra flag
+2. Phân tích cơ chế backend
+Từ hành vi này, ta có thể đoán backend code như sau (pseudo-code Python/Flask):
+        @app.route('/get_info', methods=['POST'])
+        def get_info():
+            userid = request.form['userid']
+            url = "http://localhost/" + userid  # nối input vào URL
+            r = requests.get(url)               # gọi API nội bộ
+            return r.text
+Nghĩa là /get_info chỉ là proxy.
+
+Input userid=0 → gọi http://localhost/0.
+
+Input userid=../flag → normalize thành http://localhost/flag → lộ flag.
+3. So sánh với LFI (Local File Inclusion)
+|            |   LFI                                        | Path Traversal (chall này)                                           |
+| ---------- | -------------------------------------------- | -------------------------------------------------------------------- |
+| Cơ chế     | Đọc file từ hệ thống (`open("users/"+file)`) | Gọi API nội bộ (`http://localhost/` + input)                         |
+| Input mẫu  | `page=../../etc/passwd`                      | `userid=../flag`                                                     |
+| Kết quả    | Lấy file thật trên ổ cứng                    | Gọi nhầm endpoint nội bộ `/flag`                                     |
+| Liên tưởng | Bạn tự vào nhà lục tài liệu trong tủ         | Bạn nhờ lễ tân đi lấy tài liệu, lễ tân bị lừa đi vào phòng bí mật    |
+4. Vì sao lại nghĩ ra được code backend?
+  Cách suy luận:
+  
+  Nhìn input/output: userid=0 → ra JSON user.
+  Thử input lạ: ../../etc/passwd → không phải file.
+  Thấy hint /flag → đoán ngay dev nối input vào URL nội bộ.
+  Viết pseudo-code để hình dung.
+5. 10 pattern phổ biến để luyện suy luận code backend
+| #  | Kiểu bug                  | Request                     | Pseudo-code backend                   | Ý nghĩa            |
+| -- | ------------------------- | --------------------------- | ------------------------------------- | ------------------ |
+| 1  | Path Traversal (File LFI) | `/page=../../etc/passwd`    | `include("pages/"+page)`              | Đọc file hệ thống  |
+| 2  | Path Traversal (URL)      | `userid=../flag`            | `url="http://localhost/"+id`          | Gọi nhầm API       |
+| 3  | Command Injection         | `ip=8.8.8.8;cat flag`       | `os.system("ping "+ip)`               | Chèn lệnh shell    |
+| 4  | SQLi                      | `user=admin'--`             | `SELECT * FROM users WHERE user='$u'` | Bypass auth        |
+| 5  | XXE                       | Payload XML với `<!ENTITY>` | `xml.parse(body)`                     | Đọc file qua XML   |
+| 6  | XSS                       | `/search?q=<script>`        | `echo $_GET['q']`                     | Thực thi JS        |
+| 7  | Open Redirect             | `/redirect?url=evil.com`    | `redirect(url)`                       | Điều hướng độc hại |
+| 8  | File Upload               | Upload `shell.php`          | `save("uploads/"+name)`               | RCE qua upload     |
+| 9  | JWT None                  | Token `{alg:none}`          | `jwt.decode(token)`                   | Giả mạo token      |
+| 10 | Deserialization           | `Cookie=serialize(obj)`     | `unserialize(data)`                   | Thực thi code      |
