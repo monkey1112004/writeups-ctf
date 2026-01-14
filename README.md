@@ -50,8 +50,8 @@ Mình thường dùng:
 Chào mình là **monkey1112004** — một bạn đang theo đuổi **cybersecurity & ethical hacking** 👨‍💻
 
 📫 **Contact**
-- LinkedIn: https://www.linkedin.com/in/<your-profile>
-- Email: <your email>
+
+- Email:7h41hackno.1@gmail.com
 - GitHub: https://github.com/monkey1112004
 
 ---
