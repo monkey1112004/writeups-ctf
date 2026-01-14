@@ -152,6 +152,5 @@ Host-based detection: - Watch for newly created users with UID 0 (/etc/passwd en
 •	Tools: rizin/radare2, ghidra, tshark, volatility, yara, suricata.
 •	Hướng dẫn CTF forensics: các writeup trên CTFtime, Root-Me, TryHackMe (Forensics track).
 
-Nếu cậu muốn, tớ có thể: export bản này thành file .doc/.docx để cậu tải, hoặc tách thành 1 trang tóm tắt ngắn để nộp. Nói tớ biết kiểu nào cậu muốn.
 
 
